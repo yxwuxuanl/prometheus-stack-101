@@ -1,0 +1,22 @@
+route:
+  receiver: slack
+  group_wait: 0s
+  repeat_interval: 10m
+  group_by:
+    - alertname
+  routes:
+    - receiver: slack
+      group_by:
+        - alertname
+        - instance
+      matchers:
+        - job=node-exporter
+
+receivers:
+  - name: slack
+    slack_configs:
+      - api_url: http://receiver:8080
+        title: '{{ .CommonLabels.alertname }}'
+        text: |
+          告警类型: {{ .CommonLabels.alertname }}
+          告警内容: {{ .CommonAnnotations.description }}

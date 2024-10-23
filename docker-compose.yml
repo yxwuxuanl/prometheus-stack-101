@@ -1,0 +1,92 @@
+services:
+  app:
+    build:
+      context: app
+      dockerfile: Dockerfile
+    container_name: app
+    labels:
+      dev.orbstack.http-port: '1234'
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:latest
+    container_name: node-exporter
+    pid: host
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    command:
+      - --path.rootfs=/host
+  prometheus:
+    container_name: prometheus
+    image: docker.mirror.lin2ur.com/bitnami/prometheus:2.54.1
+    ports:
+      - "9090:9090"
+    depends_on:
+      - node-exporter
+      - alertmanager
+    links:
+      - alertmanager
+      - app
+    volumes:
+      - prometheus:/data
+      - ./prometheus:/config:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command:
+      - --web.enable-lifecycle
+      - --config.file=/config/prometheus.yaml
+      - --storage.tsdb.path=/data
+      - --storage.tsdb.retention.time=3d
+      - --storage.tsdb.retention.size=5GB
+  grafana:
+    container_name: grafana
+    image: docker.mirror.lin2ur.com/grafana/grafana:11.2.1
+    environment:
+      GF_PATHS_DATA: /data
+    volumes:
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+      - grafana:/data
+    links:
+      - prometheus
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+  alertmanager:
+    container_name: alertmanager
+    image: docker.mirror.lin2ur.com/bitnami/alertmanager:0.27.0
+    links:
+      - receiver
+    depends_on:
+      - receiver
+    volumes:
+      - ./alertmanager:/config:ro
+    command:
+      - --config.file=/config/alertmanager.yaml
+      - --web.listen-address=:9093
+    ports:
+      - "9093:9093"
+  receiver:
+    container_name: receiver
+    image: docker.mirror.lin2ur.com/library/python:3.13-alpine3.19
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./alertmanager/receiver.py:/receiver.py
+    entrypoint:
+      - python
+    command:
+      - -u
+      - /receiver.py
+  ab:
+    image: docker.mirror.lin2ur.com/library/httpd
+    links:
+      - app
+    entrypoint: ab
+    command:
+      - -n100000
+      - -c20
+      - http://app:8000/?error_rate=0.2
+    restart: no
+volumes:
+  prometheus: { }
+  grafana: { }

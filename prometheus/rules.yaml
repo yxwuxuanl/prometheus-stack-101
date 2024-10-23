@@ -1,0 +1,12 @@
+groups:
+  - name: node-exporter
+    rules:
+      - record: node_memory_MemAvailable_rate
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100
+      - alert: HostOutOfMemory
+        expr: node_memory_MemAvailable_rate < 90
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          description: "Node memory is filling up (< {{ $value }}%)"
